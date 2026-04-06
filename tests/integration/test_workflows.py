@@ -245,8 +245,30 @@ class TestConcurrentAccess:
         for thread in threads:
             thread.join()
         
-        # Assert: Both operations executed (order may vary, but both should complete)
+        # Assert: Both operations executed and produced an allowed race outcome
         assert len(results) == 2
         operations = [op[0] for op in results]
-        assert "delete" in operations
-        assert "signup" in operations
+        assert operations.count("delete") == 1
+        assert operations.count("signup") == 1
+
+        status_by_operation = dict(results)
+        delete_status = status_by_operation["delete"]
+        signup_status = status_by_operation["signup"]
+
+        # Allowed outcomes depend on thread ordering:
+        # - delete may remove the existing participant (200) or run after deletion/signup race leaves nothing to delete (404)
+        # - signup may add the participant (200) or find they are already signed up (400)
+        assert delete_status in (200, 404)
+        assert signup_status in (200, 400)
+
+        response = client.get("/activities")
+        activities = response.json()
+        participants = activities[activity_name]["participants"]
+        participant_present = email in participants
+
+        # Verify final state matches one of the allowed race outcomes.
+        assert (
+            (delete_status == 200 and signup_status == 200 and participant_present) or
+            (delete_status == 200 and signup_status == 400 and not participant_present) or
+            (delete_status == 404 and signup_status == 400 and participant_present)
+        )

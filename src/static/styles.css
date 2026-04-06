@@ -125,6 +125,11 @@ section h3 {
   background-color: #b71c1c;
 }
 
+.delete-btn:focus-visible {
+  background-color: #b71c1c;
+  outline: 2px solid #1a237e;
+  outline-offset: 2px;
+}
 .form-group {
   margin-bottom: 15px;
 }
