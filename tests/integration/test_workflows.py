@@ -170,39 +170,55 @@ class TestConcurrentAccess:
     
     def test_concurrent_signups_no_race_condition(self, client, fresh_activities):
         """
-        Arrange: Setup for concurrent signups
-        Act: Multiple threads sign up for same activity simultaneously
-        Assert: All signups succeed and duplicates are properly handled
+        Arrange: Setup for concurrent signups including duplicate emails
+        Act: Multiple threads sign up for same activity simultaneously, some with the same email
+        Assert: Unique emails succeed (200) and concurrent duplicate emails yield exactly
+                one success (200) and the rest rejections (400)
         """
         # Arrange
         activity_name = "Art Studio"
-        emails = [f"artist{i}@mergington.edu" for i in range(5)]
+        unique_emails = [f"artist{i}@mergington.edu" for i in range(3)]
+        duplicate_email = "duplicate.artist@mergington.edu"
+        # Three threads will attempt to sign up the same duplicate_email concurrently
+        all_signup_args = unique_emails + [duplicate_email] * 3
         results = []
-        
+        lock = threading.Lock()
+
         def signup(email):
             response = client.post(
                 f"/activities/{activity_name}/signup",
                 params={"email": email}
             )
-            results.append((email, response.status_code))
-        
-        # Act: Launch concurrent signups
-        threads = [threading.Thread(target=signup, args=(email,)) for email in emails]
+            with lock:
+                results.append((email, response.status_code))
+
+        # Act: Launch concurrent signups (unique + duplicate attempts)
+        threads = [threading.Thread(target=signup, args=(email,)) for email in all_signup_args]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join()
-        
-        # Assert: All signups succeeded
-        assert len(results) == len(emails)
-        for email, status_code in results:
-            assert status_code == 200
-        
-        # Assert: All students are in the participant list
+
+        # Assert: All threads completed
+        assert len(results) == len(all_signup_args)
+
+        # Assert: Each unique email was accepted exactly once
         response = client.get("/activities")
         activities = response.json()
-        for email in emails:
+        for email in unique_emails:
+            statuses = [s for e, s in results if e == email]
+            assert statuses == [200], f"Expected unique signup for {email} to succeed"
             assert email in activities[activity_name]["participants"]
+
+        # Assert: Exactly one duplicate signup succeeds; the rest are rejected
+        duplicate_statuses = [s for e, s in results if e == duplicate_email]
+        assert duplicate_statuses.count(200) == 1, (
+            "Exactly one concurrent signup for the duplicate email should succeed"
+        )
+        assert duplicate_statuses.count(400) == 2, (
+            "Remaining concurrent duplicate signups should be rejected with 400"
+        )
+        assert duplicate_email in activities[activity_name]["participants"]
     
     def test_concurrent_delete_and_signup_same_participant(self, client, fresh_activities):
         """
