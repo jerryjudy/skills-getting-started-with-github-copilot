@@ -4,11 +4,11 @@
 class TestGetActivities:
     """Tests for GET /activities endpoint"""
     
-    def test_get_activities_returns_all_activities(self, client):
+    def test_get_activities_returns_all_activities(self, client, fresh_activities):
         """
         Arrange: No setup needed, activities pre-populated in fixture
         Act: Make GET request to /activities
-        Assert: Verify all 9 activities are returned with correct structure
+        Assert: Verify all activities from the fixture are returned with correct structure
         """
         # Arrange (implicit in fixture)
         
@@ -18,7 +18,7 @@ class TestGetActivities:
         # Assert
         assert response.status_code == 200
         activities = response.json()
-        assert len(activities) == 9
+        assert len(activities) == len(fresh_activities)
         assert "Chess Club" in activities
         assert "Programming Class" in activities
         
@@ -145,13 +145,12 @@ class TestSignup:
     
     def test_signup_with_special_characters_in_activity_name(self, client, fresh_activities):
         """
-        Arrange: Use activity name with special characters (URL encoding)
-        Act: Attempt signup
-        Assert: Verify endpoint handles encoded activity names correctly
+        Arrange: Use activity name containing a space (requires URL encoding in path)
+        Act: Attempt signup; the test client automatically percent-encodes path segments
+        Assert: Verify endpoint correctly decodes the activity name and completes the signup
         """
-        # Note: All current activities have simple names, so this tests the pattern
         # Arrange
-        activity_name = "Art Studio"
+        activity_name = "Art Studio"  # space is encoded as %20 in the URL path
         email = "artist@mergington.edu"
         
         # Act

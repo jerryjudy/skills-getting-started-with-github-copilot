@@ -59,6 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
             deleteButton.dataset.activity = name;
             deleteButton.dataset.email = p;
             deleteButton.title = "Remove participant";
+            deleteButton.setAttribute("aria-label", `Remove participant ${p} from ${name}`);
             deleteButton.textContent = "✕";
 
             deleteButton.addEventListener("click", async (e) => {

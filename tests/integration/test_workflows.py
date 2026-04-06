@@ -22,9 +22,6 @@ class TestSignupWorkflows:
         )
         
         # Act
-        response = client.get("/activities")
-        activities_before = response.json()
-        
         client.post(
             f"/activities/{activity_name}/signup",
             params={"email": new_email}
@@ -272,9 +269,9 @@ class TestConcurrentAccess:
         signup_status = status_by_operation["signup"]
 
         # Allowed outcomes depend on thread ordering:
-        # - delete may remove the existing participant (200) or run after deletion/signup race leaves nothing to delete (404)
-        # - signup may add the participant (200) or find they are already signed up (400)
-        assert delete_status in (200, 404)
+        # - delete always succeeds (200) since participant was pre-added and no other delete runs
+        # - signup runs concurrently: finds participant still present (400) or finds it deleted (200)
+        assert delete_status == 200
         assert signup_status in (200, 400)
 
         response = client.get("/activities")
@@ -282,9 +279,10 @@ class TestConcurrentAccess:
         participants = activities[activity_name]["participants"]
         participant_present = email in participants
 
-        # Verify final state matches one of the allowed race outcomes.
+        # Verify final state matches one of the two possible orderings:
+        # - delete ran first, then signup added participant back: signup 200, participant present
+        # - signup attempted while participant existed (400), then delete removed: participant absent
         assert (
-            (delete_status == 200 and signup_status == 200 and participant_present) or
-            (delete_status == 200 and signup_status == 400 and not participant_present) or
-            (delete_status == 404 and signup_status == 400 and participant_present)
+            (signup_status == 200 and participant_present) or
+            (signup_status == 400 and not participant_present)
         )
